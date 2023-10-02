@@ -7,6 +7,11 @@ import {Test, console} from "forge-std/Test.sol";
 import {HelperConfig} from "script/HelperConfig.s.sol";
 
 contract RaffleTest is Test {
+    /**
+     * Events
+     */
+    event EnteredRaffle(address indexed player);
+
     Raffle raffle;
     HelperConfig helperConfig;
 
@@ -24,11 +29,37 @@ contract RaffleTest is Test {
         DeployRaffle deployer = new DeployRaffle();
         (raffle, helperConfig) = deployer.run();
 
+        vm.deal(PLAYER, STARING_USER_BALANCE);
+
         (entranceFee, interval, vrfCoordinator, gasLane, subscriptionId, callbackGasLimit) =
             helperConfig.activeNetworkConfig();
     }
 
     function testRaffleInitializesInOpenState() public view {
         assert(raffle.getRaffleState() == Raffle.RaffleState.OPEN);
+    }
+
+    /////////////////////////
+    // enterRaffle         //
+    /////////////////////////
+
+    function testRaffleRevertsWhenYouDontPayEnought() public {
+        vm.prank(PLAYER);
+        vm.expectRevert(Raffle.Raffle__NotEnoughEthSent.selector);
+        raffle.enterRaffle();
+    }
+
+    function testRaffleRecordsPlayerWhenTheyEnter() public {
+        vm.prank(PLAYER);
+        raffle.enterRaffle{value: entranceFee}();
+        address playerRecorded = raffle.getPlayer(0);
+        assert(playerRecorded == PLAYER);
+    }
+
+    function testEmitsEventOnEntrance() public {
+        vm.prank(PLAYER);
+        vm.expectEmit(true, false, false, false, address(raffle));
+        emit EnteredRaffle(PLAYER);
+        raffle.enterRaffle{value: entranceFee}();
     }
 }
