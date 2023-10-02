@@ -16,6 +16,14 @@ contract HelperConfig is Script {
         uint32 callbackGasLimit;
     }
 
+    constructor() {
+        if (block.chainid == 11155111) {
+            activeNetworkConfig = getSepoliaEthConfig();
+        } else {
+            activeNetworkConfig = getOrCreateAnvilEthConfig();
+        }
+    }
+
     function getSepoliaEthConfig() public pure returns (NetworkConfig memory) {
         return NetworkConfig({
             entranceFee: 0.01 ether,
@@ -41,6 +49,7 @@ contract HelperConfig is Script {
             baseFee,
             gasPriceLink
         );
+        vm.stopBroadcast();
 
         anvilNetworkConfig = NetworkConfig({
             subscriptionId: 0, // If left as 0, our scripts will create one!
