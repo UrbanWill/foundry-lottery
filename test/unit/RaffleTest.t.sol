@@ -19,7 +19,6 @@ contract RaffleTest is Test {
     uint256 interval;
     address vrfCoordinator;
     bytes32 gasLane;
-    uint64 subscriptionId;
     uint32 callbackGasLimit;
 
     address public PLAYER = makeAddr("player");
@@ -31,8 +30,7 @@ contract RaffleTest is Test {
 
         vm.deal(PLAYER, STARING_USER_BALANCE);
 
-        (entranceFee, interval, vrfCoordinator, gasLane, subscriptionId, callbackGasLimit,) =
-            helperConfig.activeNetworkConfig();
+        (entranceFee, interval, vrfCoordinator, gasLane,, callbackGasLimit,) = helperConfig.activeNetworkConfig();
     }
 
     function testRaffleInitializesInOpenState() public view {
@@ -60,6 +58,18 @@ contract RaffleTest is Test {
         vm.prank(PLAYER);
         vm.expectEmit(true, false, false, false, address(raffle));
         emit EnteredRaffle(PLAYER);
+        raffle.enterRaffle{value: entranceFee}();
+    }
+
+    function testDontAllowPlayersToEnterWhileRaffleIsCalculating() public {
+        vm.prank(PLAYER);
+        raffle.enterRaffle{value: entranceFee}();
+        vm.warp(block.timestamp + interval + 1);
+        vm.roll(block.number + 1);
+        raffle.performUpkeep("");
+
+        vm.expectRevert(Raffle.Raffle__RaffleNotOpen.selector);
+        vm.prank(PLAYER);
         raffle.enterRaffle{value: entranceFee}();
     }
 }
