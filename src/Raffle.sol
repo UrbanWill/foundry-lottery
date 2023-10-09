@@ -20,6 +20,7 @@ contract Raffle is VRFConsumerBaseV2 {
     error Raffle__RaffleNotOpen();
     error Raffle__NotOwner();
     error Raffle__AlreadyPaused();
+    error Raffle__AlreadyOpen();
 
     /**
      * Type declarations
@@ -58,6 +59,7 @@ contract Raffle is VRFConsumerBaseV2 {
     event EnteredRaffle(address indexed player);
     event PickedWinner(address indexed winner);
     event PausedRaffle(address indexed owner, RaffleState indexed raffleState);
+    event ResumedRaffle(address indexed owner, RaffleState indexed raffleState);
     event RefundedRaffle(address payable[] indexed refundedPlayers, uint256 amount);
 
     constructor(
@@ -167,6 +169,18 @@ contract Raffle is VRFConsumerBaseV2 {
         s_raffleState = RaffleState.PAUSED;
 
         emit PausedRaffle(msg.sender, RaffleState.PAUSED);
+    }
+
+    function resumeRaffle() external onlyOwner {
+        if (msg.sender != i_owner) {
+            revert Raffle__NotOwner();
+        }
+        if (s_raffleState == RaffleState.OPEN) {
+            revert Raffle__AlreadyOpen();
+        }
+        s_raffleState = RaffleState.OPEN;
+
+        emit ResumedRaffle(msg.sender, RaffleState.OPEN);
     }
 
     function refundRaffle() external onlyOwner {

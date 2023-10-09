@@ -15,6 +15,7 @@ contract RaffleTest is Test {
     event EnteredRaffle(address indexed player);
     event PausedRaffle(address indexed owner, Raffle.RaffleState indexed raffleState);
     event RefundedRaffle(address payable[] indexed refundedPlayers, uint256 amount);
+    event ResumedRaffle(address indexed owner, Raffle.RaffleState indexed raffleState);
 
     Raffle raffle;
     HelperConfig helperConfig;
@@ -56,6 +57,7 @@ contract RaffleTest is Test {
         raffle.pauseRaffle();
         vm.expectRevert(Raffle.Raffle__AlreadyPaused.selector);
         raffle.pauseRaffle();
+        vm.stopPrank();
     }
 
     function testRafflePausePausesWhenOwner() public {
@@ -64,6 +66,28 @@ contract RaffleTest is Test {
         emit PausedRaffle(msg.sender, Raffle.RaffleState.PAUSED);
         raffle.pauseRaffle();
         assert(raffle.getRaffleState() == Raffle.RaffleState.PAUSED);
+    }
+
+    function testResumeRaffleRevertsWhenNotOwner() public {
+        vm.expectRevert(Raffle.Raffle__NotOwner.selector);
+        vm.prank(PLAYER);
+        raffle.resumeRaffle();
+    }
+
+    function testResumeRaffleRevertsAlreadyOpen() public {
+        vm.prank(raffle.getOwner());
+        vm.expectRevert(Raffle.Raffle__AlreadyOpen.selector);
+        raffle.resumeRaffle();
+    }
+
+    function testRaffleResumeResumessWhenOwner() public {
+        vm.startPrank(raffle.getOwner());
+        raffle.pauseRaffle();
+        vm.expectEmit(true, true, false, false, address(raffle));
+        emit ResumedRaffle(msg.sender, Raffle.RaffleState.OPEN);
+        raffle.resumeRaffle();
+        vm.stopPrank();
+        assert(raffle.getRaffleState() == Raffle.RaffleState.OPEN);
     }
 
     function testRefundRaffleRevertsWhenNotOwner() public {
