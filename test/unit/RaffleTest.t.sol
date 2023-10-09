@@ -13,6 +13,8 @@ contract RaffleTest is Test {
      * Events
      */
     event EnteredRaffle(address indexed player);
+    event PausedRaffle(address indexed owner, Raffle.RaffleState indexed raffleState);
+    event RefundedRaffle(address payable[] indexed refundedPlayers, uint256 amount);
 
     Raffle raffle;
     HelperConfig helperConfig;
@@ -37,6 +39,64 @@ contract RaffleTest is Test {
 
     function testRaffleInitializesInOpenState() public view {
         assert(raffle.getRaffleState() == Raffle.RaffleState.OPEN);
+    }
+
+    /////////////////////////
+    // owner actions       //
+    /////////////////////////
+
+    function testPauseRaffleRevertsWhenNotOwner() public {
+        vm.expectRevert(Raffle.Raffle__NotOwner.selector);
+        vm.prank(PLAYER);
+        raffle.pauseRaffle();
+    }
+
+    function testPauseRaffleRevertsAlreadyPaused() public {
+        vm.startPrank(raffle.getOwner());
+        raffle.pauseRaffle();
+        vm.expectRevert(Raffle.Raffle__AlreadyPaused.selector);
+        raffle.pauseRaffle();
+    }
+
+    function testRafflePausePausesWhenOwner() public {
+        vm.prank(raffle.getOwner());
+        vm.expectEmit(true, true, false, false, address(raffle));
+        emit PausedRaffle(msg.sender, Raffle.RaffleState.PAUSED);
+        raffle.pauseRaffle();
+        assert(raffle.getRaffleState() == Raffle.RaffleState.PAUSED);
+    }
+
+    function testRefundRaffleRevertsWhenNotOwner() public {
+        vm.expectRevert(Raffle.Raffle__NotOwner.selector);
+        vm.prank(PLAYER);
+        raffle.pauseRaffle();
+    }
+
+    function testRefundRaffleRefundsAndResetsRaffle() public {
+        // Arrange
+        uint256 additionalEntrances = 3;
+        uint256 startingIndex = 1; // We have starting index be 1 so we can start with address(1) and not address(0)
+        address payable[] memory s_players = new address payable[](additionalEntrances);
+        uint256 raffleBalanceBefore = raffle.getBalance();
+
+        for (uint256 i = startingIndex; i < startingIndex + additionalEntrances; i++) {
+            address player = address(uint160(i));
+            s_players[i - startingIndex] = payable(player);
+            hoax(player, 1 ether); // deal 1 eth to the player
+            raffle.enterRaffle{value: entranceFee}();
+        }
+        vm.expectEmit(true, true, false, false, address(raffle));
+        emit RefundedRaffle(s_players, raffle.getEntranceFee());
+        vm.prank(raffle.getOwner());
+        raffle.refundRaffle();
+        assert(raffle.getRaffleState() == Raffle.RaffleState.OPEN);
+        assert(raffle.getPlayersLength() == 0);
+        assert(raffle.getLastTimeStamp() == block.timestamp);
+        assert(raffle.getBalance() == raffleBalanceBefore);
+
+        for (uint256 i = 0; i < s_players.length; i++) {
+            assert(s_players[i].balance == 1 ether);
+        }
     }
 
     /////////////////////////

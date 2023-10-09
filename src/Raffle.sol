@@ -18,6 +18,8 @@ contract Raffle is VRFConsumerBaseV2 {
     error Raffle__NotEnoughEthSent();
     error Raffle__TransferFailed();
     error Raffle__RaffleNotOpen();
+    error Raffle__NotOwner();
+    error Raffle__AlreadyPaused();
 
     /**
      * Type declarations
@@ -25,7 +27,8 @@ contract Raffle is VRFConsumerBaseV2 {
 
     enum RaffleState {
         OPEN,
-        CALCULATING
+        CALCULATING,
+        PAUSED
     }
 
     /**
@@ -41,6 +44,7 @@ contract Raffle is VRFConsumerBaseV2 {
     bytes32 private immutable i_gasLane;
     uint64 private immutable i_subscriptionId;
     uint32 private immutable i_callbackGasLimit;
+    address private immutable i_owner;
 
     uint256 private s_lastTimeStamp;
     address payable[] private s_players;
@@ -53,6 +57,8 @@ contract Raffle is VRFConsumerBaseV2 {
 
     event EnteredRaffle(address indexed player);
     event PickedWinner(address indexed winner);
+    event PausedRaffle(address indexed owner, RaffleState indexed raffleState);
+    event RefundedRaffle(address payable[] indexed refundedPlayers, uint256 amount);
 
     constructor(
         uint256 entranceFee,
@@ -70,6 +76,15 @@ contract Raffle is VRFConsumerBaseV2 {
         i_callbackGasLimit = callbackGasLimit;
         s_raffleState = RaffleState.OPEN;
         s_lastTimeStamp = block.timestamp;
+
+        i_owner = msg.sender;
+    }
+
+    modifier onlyOwner() {
+        if (msg.sender != i_owner) {
+            revert Raffle__NotOwner();
+        }
+        _;
     }
 
     function enterRaffle() external payable {
@@ -139,6 +154,39 @@ contract Raffle is VRFConsumerBaseV2 {
     }
 
     /**
+     * Owner Functions
+     */
+
+    function pauseRaffle() external onlyOwner {
+        if (msg.sender != i_owner) {
+            revert Raffle__NotOwner();
+        }
+        if (s_raffleState == RaffleState.PAUSED) {
+            revert Raffle__AlreadyPaused();
+        }
+        s_raffleState = RaffleState.PAUSED;
+
+        emit PausedRaffle(msg.sender, RaffleState.PAUSED);
+    }
+
+    function refundRaffle() external onlyOwner {
+        s_raffleState = RaffleState.OPEN;
+
+        s_lastTimeStamp = block.timestamp;
+
+        uint256 playersLength = getPlayersLength();
+
+        for (uint256 i = 0; i < playersLength; i++) {
+            (bool success,) = s_players[i].call{value: i_entranceFee}("");
+            if (!success) {
+                revert Raffle__TransferFailed();
+            }
+        }
+        emit RefundedRaffle(s_players, i_entranceFee);
+        s_players = new address payable[](0);
+    }
+
+    /**
      * Getter Functions
      */
 
@@ -164,5 +212,13 @@ contract Raffle is VRFConsumerBaseV2 {
 
     function getBalance() external view returns (uint256) {
         return address(this).balance;
+    }
+
+    function getOwner() external view returns (address) {
+        return i_owner;
+    }
+
+    function getPlayersLength() public view returns (uint256) {
+        return s_players.length;
     }
 }
